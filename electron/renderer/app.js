@@ -1,91 +1,3 @@
-const chooseBtn = document.getElementById('chooseBtn');
-const analyzeBtn = document.getElementById('analyzeBtn');
-const dropZone = document.getElementById('dropZone');
-const fileName = document.getElementById('fileName');
-const statusPill = document.getElementById('statusPill');
-
-const scoreValue = document.getElementById('scoreValue');
-const scoreLabel = document.getElementById('scoreLabel');
-const meterBar = document.getElementById('meterBar');
-const scoreSummary = document.getElementById('scoreSummary');
-
-const resultImage = document.getElementById('resultImage');
-const imagePlaceholder = document.getElementById('imagePlaceholder');
-
-const isPe = document.getElementById('isPe');
-const numSections = document.getElementById('numSections');
-const avgEntropy = document.getElementById('avgEntropy');
-const importsCount = document.getElementById('importsCount');
-
-const sectionNames = document.getElementById('sectionNames');
-const reasonList = document.getElementById('reasonList');
-const explanationText = document.getElementById('explanationText');
-const loadingOverlay = document.getElementById('loadingOverlay');
-
-let selectedPath = null;
-
-function basename(filePath) {
-  return filePath.split(/[\\/]/).pop();
-}
-
-function fileUrl(p) {
-  return `file:///${p.replace(/\\/g, '/')}`;
-}
-
-function setLoading(isLoading) {
-  loadingOverlay.classList.toggle('hidden', !isLoading);
-  analyzeBtn.disabled = isLoading || !selectedPath;
-  chooseBtn.disabled = isLoading;
-  statusPill.textContent = isLoading ? 'Analyzing' : (selectedPath ? 'Ready' : 'Idle');
-}
-
-function resetResults() {
-  scoreValue.textContent = '--';
-  scoreLabel.textContent = 'Waiting';
-  meterBar.style.width = '0%';
-  scoreSummary.textContent = 'Select a file and run analysis to see the score.';
-
-  resultImage.style.display = 'none';
-  resultImage.src = '';
-  imagePlaceholder.style.display = 'block';
-
-  isPe.textContent = '--';
-  numSections.textContent = '--';
-  avgEntropy.textContent = '--';
-  importsCount.textContent = '--';
-
-  sectionNames.innerHTML = '';
-  reasonList.innerHTML = '';
-  explanationText.textContent = 'No explanation yet';
-}
-
-function updateSelectedFile(filePath) {
-  selectedPath = filePath;
-  fileName.textContent = filePath ? basename(filePath) : 'No file selected';
-  analyzeBtn.disabled = !filePath;
-  statusPill.textContent = filePath ? 'Ready' : 'Idle';
-  resetResults();
-}
-
-function addTag(text) {
-  const el = document.createElement('span');
-  el.className = 'tag';
-  el.textContent = text;
-  sectionNames.appendChild(el);
-}
-
-function addReason(text) {
-  const li = document.createElement('li');
-  li.textContent = text;
-  reasonList.appendChild(li);
-}
-
-function scoreTone(score) {
-  if (score >= 70) return 'High Risk';
-  if (score >= 40) return 'Moderate Risk';
-  return 'Low Risk';
-}
-
 function renderResult(result) {
   const peInfo = result.pe_info || {};
   const scoreInfo = result.score_info || {};
@@ -96,13 +8,18 @@ function renderResult(result) {
   scoreLabel.textContent = scoreInfo.label || 'Waiting';
   meterBar.style.width = `${scoreInfo.score ?? 0}%`;
 
-  if (scoreInfo.cnn_used) {
+  if (cnnInfo.available && scoreInfo.blend_mode === 'cnn_primary') {
+    const cnnWeight = Math.round((scoreInfo.cnn_weight ?? 0.75) * 100);
+    const peWeight = Math.round((scoreInfo.pe_weight ?? 0.25) * 100);
+    const top1 = Math.round((cnnInfo.top1_confidence ?? 0) * 100);
+
     scoreSummary.textContent =
-      `${scoreTone(scoreInfo.score)} based on PE rules (${scoreInfo.rule_score}/100) ` +
-      `with a limited CNN support bonus (+${scoreInfo.cnn_bonus ?? 0}).`;
+      `${scoreTone(scoreInfo.score ?? 0)} from CNN-primary fusion ` +
+      `(${cnnWeight}% CNN, ${peWeight}% PE). ` +
+      `CNN visual score: ${cnnInfo.visual_score ?? 0}/100, top confidence: ${top1}%.`;
   } else {
     scoreSummary.textContent =
-      `${scoreTone(scoreInfo.score ?? 0)} based mainly on entropy, imports, PE structure, and suspicious section names.`;
+      `${scoreTone(scoreInfo.score ?? 0)} based mainly on PE structure because the CNN was unavailable.`;
   }
 
   isPe.textContent = peInfo.is_pe ? 'Yes' : 'No';
@@ -135,47 +52,6 @@ function renderResult(result) {
   }
 }
 
-chooseBtn.addEventListener('click', async () => {
-  const path = await window.desktopAPI.pickFile();
-  if (path) updateSelectedFile(path);
-});
-
-analyzeBtn.addEventListener('click', async () => {
-  if (!selectedPath) return;
-
-  setLoading(true);
-
-  try {
-    const result = await window.desktopAPI.runAnalysis(selectedPath);
-    renderResult(result);
-    statusPill.textContent = 'Complete';
-  } catch (err) {
-    statusPill.textContent = 'Error';
-    explanationText.textContent = String(err);
-    alert(`Analysis failed:\n\n${err}`);
-  } finally {
-    setLoading(false);
-  }
-});
-
-dropZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  dropZone.classList.add('dragover');
-});
-
-dropZone.addEventListener('dragleave', () => {
-  dropZone.classList.remove('dragover');
-});
-
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('dragover');
-
-  const file = e.dataTransfer.files?.[0];
-  if (!file) return;
-
-  updateSelectedFile(file.path);
-});
 window.desktopAPI.onAutoScanResult?.(({ filePath, result }) => {
   selectedPath = filePath;
   fileName.textContent = basename(filePath);
