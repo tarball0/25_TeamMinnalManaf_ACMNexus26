@@ -3,6 +3,7 @@ const analyzeBtn = document.getElementById('analyzeBtn');
 const dropZone = document.getElementById('dropZone');
 const fileName = document.getElementById('fileName');
 const statusPill = document.getElementById('statusPill');
+const downloadsInfo = document.getElementById('downloadsInfo');
 
 const scoreValue = document.getElementById('scoreValue');
 const scoreLabel = document.getElementById('scoreLabel');
@@ -25,11 +26,12 @@ const loadingOverlay = document.getElementById('loadingOverlay');
 let selectedPath = null;
 
 function basename(filePath) {
-  return filePath.split(/[\\/]/).pop();
+  return String(filePath || '').split(/[\\/]/).pop() || 'Unknown';
 }
 
-function fileUrl(p) {
-  return `file:///${p.replace(/\\/g, '/')}`;
+function fileUrl(filePath) {
+  const cleaned = String(filePath).replace(/\\/g, '/');
+  return new URL(`file:///${cleaned}`).href;
 }
 
 function setLoading(isLoading) {
@@ -64,11 +66,12 @@ function resetResults() {
   explanationText.textContent = 'No explanation yet';
 }
 
-function updateSelectedFile(filePath) {
+function updateSelectedFile(filePath, source = 'Manual') {
   selectedPath = filePath;
   fileName.textContent = filePath ? basename(filePath) : 'No file selected';
+  fileName.title = filePath || '';
   analyzeBtn.disabled = !filePath;
-  statusPill.textContent = filePath ? 'Ready' : 'Idle';
+  statusPill.textContent = filePath ? `${source} ready` : 'Idle';
   resetResults();
 }
 
@@ -91,7 +94,7 @@ function scoreTone(score) {
   return 'Low Risk';
 }
 
-function renderResult(result) {
+function renderResult(result, source = 'Manual analysis') {
   const peInfo = result.pe_info || {};
   const scoreInfo = result.score_info || {};
   const imageInfo = result.image_info || {};
@@ -107,16 +110,16 @@ function renderResult(result) {
     const top1 = Math.round((cnnInfo.top1_confidence ?? 0) * 100);
 
     scoreSummary.textContent =
-      `${scoreTone(scoreInfo.score ?? 0)} from CNN-primary fusion ` +
+      `${source}: ${scoreTone(scoreInfo.score ?? 0)} from CNN-primary fusion ` +
       `(${cnnWeight}% CNN, ${peWeight}% PE). ` +
       `CNN visual score: ${cnnInfo.visual_score ?? 0}/100, top confidence: ${top1}%.`;
   } else if (scoreInfo.cnn_used) {
     scoreSummary.textContent =
-      `${scoreTone(scoreInfo.score ?? 0)} based on PE rules (${scoreInfo.rule_score ?? 0}/100) ` +
+      `${source}: ${scoreTone(scoreInfo.score ?? 0)} based on PE rules (${scoreInfo.rule_score ?? 0}/100) ` +
       `with a limited CNN support bonus (+${scoreInfo.cnn_bonus ?? 0}).`;
   } else {
     scoreSummary.textContent =
-      `${scoreTone(scoreInfo.score ?? 0)} based mainly on PE structure because the CNN was unavailable.`;
+      `${source}: ${scoreTone(scoreInfo.score ?? 0)} based mainly on PE structure because the CNN was unavailable.`;
   }
 
   isPe.textContent = peInfo.is_pe ? 'Yes' : 'No';
@@ -125,16 +128,16 @@ function renderResult(result) {
   importsCount.textContent = String(peInfo.imports_count ?? 0);
 
   sectionNames.innerHTML = '';
-  if (peInfo.section_names && peInfo.section_names.length) {
+  if (Array.isArray(peInfo.section_names) && peInfo.section_names.length) {
     peInfo.section_names.forEach((name) => addTag(name));
   } else {
     addTag('No sections found');
   }
 
   reasonList.innerHTML = '';
-  if (scoreInfo.reasons && scoreInfo.reasons.length) {
+  if (Array.isArray(scoreInfo.reasons) && scoreInfo.reasons.length) {
     scoreInfo.reasons.forEach((reason) => addReason(reason));
-  } else if (cnnInfo.available && cnnInfo.reasons && cnnInfo.reasons.length) {
+  } else if (cnnInfo.available && Array.isArray(cnnInfo.reasons) && cnnInfo.reasons.length) {
     cnnInfo.reasons.forEach((reason) => addReason(`CNN: ${reason}`));
   } else {
     addReason('No major suspicious indicators were triggered by the current rules.');
@@ -156,9 +159,9 @@ function renderResult(result) {
 chooseBtn.addEventListener('click', async () => {
   try {
     const pickedPath = await window.desktopAPI.pickFile();
-    if (pickedPath) {
-      updateSelectedFile(pickedPath);
-    }
+    if (!pickedPath) return;
+
+    updateSelectedFile(pickedPath, 'Manual');
   } catch (err) {
     statusPill.textContent = 'Error';
     explanationText.textContent = `File selection failed:\n${String(err)}`;
@@ -172,7 +175,7 @@ analyzeBtn.addEventListener('click', async () => {
 
   try {
     const result = await window.desktopAPI.runAnalysis(selectedPath);
-    renderResult(result);
+    renderResult(result, 'Manual analysis');
     statusPill.textContent = 'Complete';
   } catch (err) {
     statusPill.textContent = 'Error';
@@ -199,42 +202,40 @@ dropZone.addEventListener('drop', (e) => {
   const file = e.dataTransfer.files?.[0];
   if (!file) return;
 
-  updateSelectedFile(file.path);
+  updateSelectedFile(file.path, 'Drag and drop');
 });
 
 window.desktopAPI.onAutoScanResult?.(({ filePath, result }) => {
-  selectedPath = filePath;
-  fileName.textContent = basename(filePath);
-  analyzeBtn.disabled = false;
-  renderResult(result);
+  updateSelectedFile(filePath, 'Auto-scan');
+  renderResult(result, 'Automatic Downloads scan');
   statusPill.textContent = 'Auto-scanned';
 });
 
 window.desktopAPI.onAutoScanError?.(({ filePath, error }) => {
-  selectedPath = filePath;
-  fileName.textContent = basename(filePath);
-  analyzeBtn.disabled = false;
+  updateSelectedFile(filePath, 'Auto-scan');
   explanationText.textContent = `Auto-scan failed:\n${error}`;
   statusPill.textContent = 'Auto-scan error';
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    const downloadsPath = await window.desktopAPI.getDownloadsPath?.();
+    if (downloadsPath) {
+      downloadsInfo.textContent = `Watching: ${downloadsPath}`;
+      downloadsInfo.title = downloadsPath;
+    }
+
     const lastResult = await window.desktopAPI.getLastAutoScanResult?.();
     if (lastResult?.filePath && lastResult?.result) {
-      selectedPath = lastResult.filePath;
-      fileName.textContent = basename(lastResult.filePath);
-      analyzeBtn.disabled = false;
-      renderResult(lastResult.result);
+      updateSelectedFile(lastResult.filePath, 'Auto-scan');
+      renderResult(lastResult.result, 'Last automatic Downloads scan');
       statusPill.textContent = 'Last auto-scan';
       return;
     }
 
     const lastError = await window.desktopAPI.getLastAutoScanError?.();
     if (lastError?.filePath && lastError?.error) {
-      selectedPath = lastError.filePath;
-      fileName.textContent = basename(lastError.filePath);
-      analyzeBtn.disabled = false;
+      updateSelectedFile(lastError.filePath, 'Auto-scan');
       explanationText.textContent = `Auto-scan failed:\n${lastError.error}`;
       statusPill.textContent = 'Last auto-scan error';
     }
