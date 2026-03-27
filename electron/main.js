@@ -15,7 +15,9 @@ const fsp = require('node:fs/promises');
 const { spawn } = require('node:child_process');
 const chokidar = require('chokidar');
 
-const PROJECT_ROOT = path.join(__dirname, '..');
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const RENDERER_DIR = path.join(PROJECT_ROOT, 'renderer');
+const APP_DIR = path.join(PROJECT_ROOT, 'app');
 const WATCHED_EXTENSIONS = new Set(['.exe', '.dll']);
 
 let mainWindow = null;
@@ -50,11 +52,12 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: false
     }
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.loadFile(path.join(RENDERER_DIR, 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -70,8 +73,15 @@ function createWindow() {
 }
 
 function showMainWindow() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+
   mainWindow.show();
   mainWindow.focus();
 }
@@ -97,7 +107,7 @@ function maybeCreateTray() {
     path.join(PROJECT_ROOT, 'electron', 'tray.png')
   ];
 
-  const iconPath = trayCandidates.find((p) => fs.existsSync(p));
+  const iconPath = trayCandidates.find((candidate) => fs.existsSync(candidate));
   if (!iconPath) return;
 
   const trayIcon = nativeImage.createFromPath(iconPath);
@@ -119,9 +129,12 @@ function maybeCreateTray() {
   ]);
 
   tray.setContextMenu(menu);
-
   tray.on('click', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow();
+      return;
+    }
+
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
@@ -131,7 +144,11 @@ function maybeCreateTray() {
 }
 
 function getPythonLaunchConfig() {
-  const bridgeScript = path.join(PROJECT_ROOT, 'app', 'electron_bridge.py');
+  const bridgeScript = path.join(APP_DIR, 'electron_bridge.py');
+
+  if (!fs.existsSync(bridgeScript)) {
+    throw new Error(`Python bridge not found: ${bridgeScript}`);
+  }
 
   if (process.env.PYTHON_PATH) {
     return {
@@ -155,9 +172,16 @@ function getPythonLaunchConfig() {
 
 function runAnalysis(filePath) {
   return new Promise((resolve, reject) => {
-    const { command, args } = getPythonLaunchConfig();
+    let launch;
 
-    const child = spawn(command, [...args, filePath], {
+    try {
+      launch = getPythonLaunchConfig();
+    } catch (error) {
+      reject(String(error.message || error));
+      return;
+    }
+
+    const child = spawn(launch.command, [...launch.args, filePath], {
       cwd: PROJECT_ROOT,
       windowsHide: true
     });
@@ -179,18 +203,16 @@ function runAnalysis(filePath) {
 
     child.on('close', (code) => {
       if (code !== 0) {
-        reject(stderr || `Python process exited with code ${code}`);
+        reject((stderr || stdout || `Python process exited with code ${code}`).trim());
         return;
       }
 
       try {
         const parsed = JSON.parse(stdout);
-
         if (!parsed.ok) {
           reject(parsed.error || 'Unknown analysis error');
           return;
         }
-
         resolve(parsed.result);
       } catch (err) {
         reject(`Could not parse analyzer output: ${err.message}\n\nRaw output:\n${stdout}`);
@@ -275,7 +297,6 @@ async function autoAnalyzeFile(filePath) {
 
   try {
     const fingerprint = await ensureStableFile(filePath);
-
     if (scannedFingerprints.get(filePath) === fingerprint) {
       return;
     }
@@ -289,7 +310,7 @@ async function autoAnalyzeFile(filePath) {
     sendToRenderer('autoscan:complete', lastAutoScanSuccess);
     showSuccessNotification(filePath, result);
   } catch (error) {
-    const message = String(error);
+    const message = String(error.message || error);
 
     lastAutoScanError = { filePath, error: message };
     lastAutoScanSuccess = null;
@@ -348,16 +369,13 @@ ipcMain.handle('analysis:run', async (_event, filePath) => {
   if (!filePath) {
     throw new Error('No file selected.');
   }
+
   return await runAnalysis(filePath);
 });
 
-ipcMain.handle('autoscan:getLastResult', async () => {
-  return lastAutoScanSuccess;
-});
-
-ipcMain.handle('autoscan:getLastError', async () => {
-  return lastAutoScanError;
-});
+ipcMain.handle('autoscan:getLastResult', async () => lastAutoScanSuccess);
+ipcMain.handle('autoscan:getLastError', async () => lastAutoScanError);
+ipcMain.handle('system:getDownloadsPath', async () => app.getPath('downloads'));
 
 app.whenReady().then(() => {
   createWindow();
@@ -387,5 +405,5 @@ app.on('before-quit', async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Keep app alive in background.
+  // Keep app alive in background for download monitoring.
 });
