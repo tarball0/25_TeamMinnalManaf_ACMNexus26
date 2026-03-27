@@ -176,3 +176,16 @@ dropZone.addEventListener('drop', (e) => {
 
   updateSelectedFile(file.path);
 });
+window.desktopAPI.onAutoScanResult?.(({ filePath, result }) => {
+  selectedPath = filePath;
+  fileName.textContent = basename(filePath);
+  renderResult(result);
+  statusPill.textContent = 'Auto-scanned';
+});
+
+window.desktopAPI.onAutoScanError?.(({ filePath, error }) => {
+  selectedPath = filePath;
+  fileName.textContent = basename(filePath);
+  explanationText.textContent = `Auto-scan failed:\n${error}`;
+  statusPill.textContent = 'Auto-scan error';
+});
