@@ -99,10 +99,10 @@ function renderResult(result) {
   if (scoreInfo.cnn_used) {
     scoreSummary.textContent =
       `${scoreTone(scoreInfo.score)} based on PE rules (${scoreInfo.rule_score}/100) ` +
-      `plus pretrained CNN visual signal (${scoreInfo.cnn_visual_score}/100).`;
+      `with a limited CNN support bonus (+${scoreInfo.cnn_bonus ?? 0}).`;
   } else {
     scoreSummary.textContent =
-      `${scoreTone(scoreInfo.score ?? 0)} based on entropy, imports, PE structure, and suspicious section names.`;
+      `${scoreTone(scoreInfo.score ?? 0)} based mainly on entropy, imports, PE structure, and suspicious section names.`;
   }
 
   isPe.textContent = peInfo.is_pe ? 'Yes' : 'No';
