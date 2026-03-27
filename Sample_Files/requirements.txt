@@ -1,0 +1,6 @@
+streamlit
+pefile
+numpy
+pillow
+matplotlib
+pandas

@@ -1,0 +1,33 @@
+{
+    "file_name": "tmptygcgx2h.exe",
+    "timestamp": "2026-03-27T22:08:38.608124",
+    "image_info": {
+        "image_path": "outputs\\images\\tmptygcgx2h.png",
+        "width": 1024,
+        "height": 1025,
+        "file_size_bytes": 1048603
+    },
+    "pe_info": {
+        "is_pe": false,
+        "num_sections": 0,
+        "section_names": [],
+        "section_entropies": [],
+        "avg_section_entropy": 0.0,
+        "imports_count": 0,
+        "has_debug": false,
+        "has_tls": false,
+        "entry_point": null,
+        "suspicious_section_names": [],
+        "parse_error": "'DOS Header magic not found.'"
+    },
+    "score_info": {
+        "score": 60,
+        "label": "Moderately Suspicious",
+        "reasons": [
+            "File could not be parsed as a normal PE executable.",
+            "Very low import count may indicate a packed or minimized binary.",
+            "Very small number of sections can be suspicious."
+        ]
+    },
+    "explanation": "The uploaded file was converted into a grayscale image of size 1024 x 1025.\nThe file could not be fully parsed as a standard PE executable.\nBased on the current rule-based checks, the file received a suspicion score of 60/100 and is classified as: Moderately Suspicious.\nMain reasons:\n- File could not be parsed as a normal PE executable.\n- Very low import count may indicate a packed or minimized binary.\n- Very small number of sections can be suspicious.\nThis is a hackathon MVP and not a full antivirus engine. It gives an explainable early warning based on file structure, entropy, and image pattern generation."
+}

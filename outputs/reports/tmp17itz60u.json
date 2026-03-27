@@ -1,0 +1,41 @@
+{
+    "file_name": "tmp17itz60u.exe",
+    "timestamp": "2026-03-27T21:51:40.461572",
+    "image_info": {
+        "image_path": "outputs\\images\\tmp17itz60u.png",
+        "width": 32,
+        "height": 96,
+        "file_size_bytes": 3072
+    },
+    "pe_info": {
+        "is_pe": true,
+        "num_sections": 4,
+        "section_names": [
+            ".text",
+            ".rdata",
+            ".data",
+            ".pdata"
+        ],
+        "section_entropies": [
+            4.2449,
+            0.0941,
+            0.163,
+            0.0815
+        ],
+        "avg_section_entropy": 1.1459,
+        "imports_count": 0,
+        "has_debug": false,
+        "has_tls": false,
+        "entry_point": 4096,
+        "suspicious_section_names": [],
+        "parse_error": null
+    },
+    "score_info": {
+        "score": 20,
+        "label": "Low Suspicion",
+        "reasons": [
+            "Very low import count may indicate a packed or minimized binary."
+        ]
+    },
+    "explanation": "The uploaded file was converted into a grayscale image of size 32 x 96.\nThe file appears to be a valid PE executable with 4 sections and 0 imported functions.\nThe average section entropy is 1.15.\nBased on the current rule-based checks, the file received a suspicion score of 20/100 and is classified as: Low Suspicion.\nMain reasons:\n- Very low import count may indicate a packed or minimized binary.\nThis is a hackathon MVP and not a full antivirus engine. It gives an explainable early warning based on file structure, entropy, and image pattern generation."
+}
