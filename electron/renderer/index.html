@@ -24,26 +24,20 @@
       <div class="side-panel">
         <h3>Workflow</h3>
         <ol>
-          <li>Select an EXE or DLL</li>
-          <li>Run structural analysis</li>
-          <li>Inspect score, sections, and image</li>
+          <li>Choose an EXE or DLL manually</li>
+          <li>Or let Downloads auto-scan run in background</li>
+          <li>Inspect score, reasons, and byte image</li>
         </ol>
       </div>
 
       <div class="side-panel">
-        <h3>What it checks</h3>
-        <ul>
-          <li>PE parsing</li>
-          <li>Section entropy</li>
-          <li>Import count</li>
-          <li>Suspicious section names</li>
-          <li>Byte-image pattern</li>
-        </ul>
+        <h3>Background monitor</h3>
+        <p id="downloadsInfo">Watching Downloads…</p>
       </div>
 
       <div class="side-panel muted">
         <h3>Note</h3>
-        <p>This is an explainable hackathon MVP, not a full antivirus engine.</p>
+        <p>This is an explainable triage tool, not a full antivirus engine.</p>
       </div>
     </aside>
 
@@ -51,7 +45,7 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">Desktop Malware Triage</p>
-          <h2>Analyze suspicious executables with a cleaner UI</h2>
+          <h2>Manual analysis + automatic Downloads monitoring</h2>
         </div>
         <div class="status-pill" id="statusPill">Idle</div>
       </header>
