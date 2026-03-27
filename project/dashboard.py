@@ -43,8 +43,14 @@ st.divider()
 st.subheader("Behavioral Matrix Heatmaps")
 feature_cols = ['total_events', 'failed_logins', 'success_logins', 'unique_ips', 'hour_of_day']
 
+# Scale the data for the colors
 scaler = StandardScaler()
 scaled_data = pd.DataFrame(scaler.fit_transform(df_scored[feature_cols]), columns=feature_cols)
+
+# ---> THE FIX: Attach the formatted timestamps to the Y-axis <---
+scaled_data.index = df_scored['timestamp'].dt.strftime('%H:%M')
+
+# Add the scores back in so we can filter by them
 scaled_data['score'] = df_scored['anomaly_score'].values
 
 colA, colB = st.columns(2)
