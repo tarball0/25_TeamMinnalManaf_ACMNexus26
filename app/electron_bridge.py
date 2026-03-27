@@ -21,7 +21,7 @@ def main():
         print(json.dumps({"ok": False, "error": "No file path was provided."}))
         sys.exit(1)
 
-    file_path = Path(sys.argv[1])
+    file_path = Path(sys.argv[1]).expanduser().resolve()
 
     if not file_path.exists():
         print(json.dumps({"ok": False, "error": f"File not found: {file_path}"}))
