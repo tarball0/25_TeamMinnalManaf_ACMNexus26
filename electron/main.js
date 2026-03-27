@@ -3,14 +3,15 @@ const {
   BrowserWindow,
   ipcMain,
   dialog,
+  Notification,
   Tray,
   Menu,
-  Notification,
   nativeImage
 } = require('electron');
 
 const path = require('node:path');
-const fs = require('node:fs/promises');
+const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 const { spawn } = require('node:child_process');
 const chokidar = require('chokidar');
 
@@ -57,6 +58,7 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.focus();
   });
 
   mainWindow.on('close', (event) => {
@@ -68,68 +70,44 @@ function createWindow() {
 }
 
 function showMainWindow() {
-  if (!mainWindow) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
 }
 
-function sendAutoScanSuccessToRenderer(payload) {
+function sendToRenderer(channel, payload) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   if (mainWindow.webContents.isLoading()) {
     mainWindow.webContents.once('did-finish-load', () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.webContents.send('autoscan:complete', payload);
+      mainWindow.webContents.send(channel, payload);
     });
     return;
   }
 
-  mainWindow.webContents.send('autoscan:complete', payload);
+  mainWindow.webContents.send(channel, payload);
 }
 
-function sendAutoScanErrorToRenderer(payload) {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+function maybeCreateTray() {
+  const trayCandidates = [
+    path.join(PROJECT_ROOT, 'assets', 'tray.png'),
+    path.join(PROJECT_ROOT, 'assets', 'icon.png'),
+    path.join(PROJECT_ROOT, 'electron', 'tray.png')
+  ];
 
-  if (mainWindow.webContents.isLoading()) {
-    mainWindow.webContents.once('did-finish-load', () => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.webContents.send('autoscan:error', payload);
-    });
-    return;
-  }
+  const iconPath = trayCandidates.find((p) => fs.existsSync(p));
+  if (!iconPath) return;
 
-  mainWindow.webContents.send('autoscan:error', payload);
-}
-
-function createTray() {
-  const iconPath = path.join(PROJECT_ROOT, 'assets', 'tray.png');
   const trayIcon = nativeImage.createFromPath(iconPath);
+  if (trayIcon.isEmpty()) return;
 
   tray = new Tray(trayIcon);
   tray.setToolTip('ExeVision');
 
-  refreshTrayMenu();
-
-  tray.on('click', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      showMainWindow();
-    }
-  });
-}
-
-function refreshTrayMenu() {
-  if (!tray) return;
-
   const menu = Menu.buildFromTemplate([
     { label: 'Open ExeVision', click: showMainWindow },
-    {
-      label: watcher ? 'Watching Downloads' : 'Watcher not running',
-      enabled: false
-    },
     { type: 'separator' },
     {
       label: 'Quit',
@@ -141,6 +119,15 @@ function refreshTrayMenu() {
   ]);
 
   tray.setContextMenu(menu);
+
+  tray.on('click', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isVisible()) {
+      mainWindow.hide();
+    } else {
+      showMainWindow();
+    }
+  });
 }
 
 function getPythonLaunchConfig() {
@@ -225,7 +212,7 @@ async function ensureStableFile(filePath, checks = 3, delayMs = 1500) {
   let stableCount = 0;
 
   while (stableCount < checks) {
-    const stat = await fs.stat(filePath);
+    const stat = await fsp.stat(filePath);
 
     if (!stat.isFile()) {
       throw new Error('Target is not a file.');
@@ -257,7 +244,7 @@ function showSuccessNotification(filePath, result) {
 
   notification.on('click', () => {
     showMainWindow();
-    sendAutoScanSuccessToRenderer(payload);
+    sendToRenderer('autoscan:complete', payload);
   });
 
   notification.show();
@@ -274,7 +261,7 @@ function showErrorNotification(filePath, errorMessage) {
 
   notification.on('click', () => {
     showMainWindow();
-    sendAutoScanErrorToRenderer(payload);
+    sendToRenderer('autoscan:error', payload);
   });
 
   notification.show();
@@ -299,7 +286,7 @@ async function autoAnalyzeFile(filePath) {
     lastAutoScanSuccess = { filePath, result };
     lastAutoScanError = null;
 
-    sendAutoScanSuccessToRenderer(lastAutoScanSuccess);
+    sendToRenderer('autoscan:complete', lastAutoScanSuccess);
     showSuccessNotification(filePath, result);
   } catch (error) {
     const message = String(error);
@@ -307,7 +294,7 @@ async function autoAnalyzeFile(filePath) {
     lastAutoScanError = { filePath, error: message };
     lastAutoScanSuccess = null;
 
-    sendAutoScanErrorToRenderer(lastAutoScanError);
+    sendToRenderer('autoscan:error', lastAutoScanError);
     showErrorNotification(filePath, message);
   } finally {
     activeScans.delete(filePath);
@@ -338,8 +325,6 @@ function startDownloadsWatcher() {
   watcher.on('error', (error) => {
     console.error('Watcher error:', error);
   });
-
-  refreshTrayMenu();
 }
 
 ipcMain.handle('dialog:pickFile', async () => {
@@ -360,6 +345,9 @@ ipcMain.handle('dialog:pickFile', async () => {
 });
 
 ipcMain.handle('analysis:run', async (_event, filePath) => {
+  if (!filePath) {
+    throw new Error('No file selected.');
+  }
   return await runAnalysis(filePath);
 });
 
@@ -373,7 +361,7 @@ ipcMain.handle('autoscan:getLastError', async () => {
 
 app.whenReady().then(() => {
   createWindow();
-  createTray();
+  maybeCreateTray();
   startDownloadsWatcher();
 
   if (app.isPackaged) {
@@ -383,7 +371,11 @@ app.whenReady().then(() => {
   }
 
   app.on('activate', () => {
-    showMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow();
+    } else {
+      showMainWindow();
+    }
   });
 });
 
@@ -395,5 +387,5 @@ app.on('before-quit', async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Keep running in tray.
+  // Keep app alive in background.
 });
