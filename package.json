@@ -1,0 +1,12 @@
+{
+  "name": "exevision",
+  "version": "1.0.0",
+  "description": "Electron UI for executable grayscale analyzer",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^37.2.0"
+  }
+}
