@@ -65,3 +65,39 @@ window.desktopAPI.onAutoScanError?.(({ filePath, error }) => {
   explanationText.textContent = `Auto-scan failed:\n${error}`;
   statusPill.textContent = 'Auto-scan error';
 });
+window.desktopAPI.onAutoScanResult?.(({ filePath, result }) => {
+  selectedPath = filePath;
+  fileName.textContent = basename(filePath);
+  renderResult(result);
+  statusPill.textContent = 'Auto-scanned';
+});
+
+window.desktopAPI.onAutoScanError?.(({ filePath, error }) => {
+  selectedPath = filePath;
+  fileName.textContent = basename(filePath);
+  explanationText.textContent = `Auto-scan failed:\n${error}`;
+  statusPill.textContent = 'Auto-scan error';
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const lastResult = await window.desktopAPI.getLastAutoScanResult?.();
+    if (lastResult?.filePath && lastResult?.result) {
+      selectedPath = lastResult.filePath;
+      fileName.textContent = basename(lastResult.filePath);
+      renderResult(lastResult.result);
+      statusPill.textContent = 'Last auto-scan';
+      return;
+    }
+
+    const lastError = await window.desktopAPI.getLastAutoScanError?.();
+    if (lastError?.filePath && lastError?.error) {
+      selectedPath = lastError.filePath;
+      fileName.textContent = basename(lastError.filePath);
+      explanationText.textContent = `Auto-scan failed:\n${lastError.error}`;
+      statusPill.textContent = 'Last auto-scan error';
+    }
+  } catch (err) {
+    console.error('Failed to load last auto-scan state:', err);
+  }
+});
