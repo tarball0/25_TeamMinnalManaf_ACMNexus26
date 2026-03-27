@@ -110,9 +110,27 @@ body {
   line-height: 1.7;
 }
 
+.monitor-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .main-panel {
   padding: 24px;
   overflow-y: auto;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.cnn-status-note {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #c8d4ef;
+  line-height: 1.6;
 }
 
 .topbar {
@@ -347,6 +365,83 @@ body {
 
 .panel-head h3 {
   margin: 0;
+}
+
+.history-head {
+  margin-bottom: 12px;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-empty {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.history-item {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.history-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(110, 168, 254, 0.35);
+  background: rgba(110, 168, 254, 0.08);
+}
+
+.history-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.history-title-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-status {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.history-status-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: #9ff0b7;
+}
+
+.history-status-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ffb1b1;
+}
+
+.history-meta,
+.history-path,
+.history-summary {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.history-path {
+  word-break: break-all;
 }
 
 .image-wrap {

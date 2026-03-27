@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   getLastAutoScanResult: () => ipcRenderer.invoke('autoscan:getLastResult'),
   getLastAutoScanError: () => ipcRenderer.invoke('autoscan:getLastError'),
   getDownloadsPath: () => ipcRenderer.invoke('system:getDownloadsPath'),
+  getCnnStatus: () => ipcRenderer.invoke('system:getCnnStatus'),
+  getHistory: () => ipcRenderer.invoke('history:getAll'),
 
   onAutoScanResult: (callback) => {
     const handler = (_event, payload) => callback(payload);
@@ -17,5 +19,11 @@ contextBridge.exposeInMainWorld('desktopAPI', {
     const handler = (_event, payload) => callback(payload);
     ipcRenderer.on('autoscan:error', handler);
     return () => ipcRenderer.removeListener('autoscan:error', handler);
+  },
+
+  onHistoryUpdated: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('history:updated', handler);
+    return () => ipcRenderer.removeListener('history:updated', handler);
   }
 });

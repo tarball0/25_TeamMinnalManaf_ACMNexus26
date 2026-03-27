@@ -7,16 +7,16 @@
     content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self';"
   />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Executable Grayscale Analyzer</title>
+  <title>Minnalize</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand-card">
-        <div class="brand-icon">🛡️</div>
+        <div class="brand-icon">MZ</div>
         <div>
-          <h1>ExeVision</h1>
+          <h1>Minnalize</h1>
           <p>Executable Grayscale Analyzer</p>
         </div>
       </div>
@@ -32,12 +32,24 @@
 
       <div class="side-panel">
         <h3>Background monitor</h3>
-        <p id="downloadsInfo">Watching Downloads…</p>
+        <p id="downloadsInfo">Watching Downloads...</p>
+        <p class="monitor-note">Closing the window keeps Minnalize running in the background.</p>
+      </div>
+
+      <div class="side-panel">
+        <div class="panel-head history-head">
+          <h3>Scan history</h3>
+          <span class="chip">Recent files</span>
+        </div>
+        <div id="historyList" class="history-list">
+          <p class="history-empty">No scans yet.</p>
+        </div>
       </div>
 
       <div class="side-panel muted">
         <h3>Note</h3>
         <p>This is an explainable triage tool, not a full antivirus engine.</p>
+        <p id="cnnStatusNote" class="cnn-status-note hidden"></p>
       </div>
     </aside>
 
@@ -53,7 +65,7 @@
       <section class="hero-grid">
         <div class="upload-card">
           <div id="dropZone" class="drop-zone">
-            <div class="drop-icon">📂</div>
+            <div class="drop-icon">FILE</div>
             <h3>Drag and drop a file here</h3>
             <p>or choose a file manually</p>
             <div class="button-row">

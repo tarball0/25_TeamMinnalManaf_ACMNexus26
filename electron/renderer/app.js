@@ -4,6 +4,8 @@ const dropZone = document.getElementById('dropZone');
 const fileName = document.getElementById('fileName');
 const statusPill = document.getElementById('statusPill');
 const downloadsInfo = document.getElementById('downloadsInfo');
+const historyList = document.getElementById('historyList');
+const cnnStatusNote = document.getElementById('cnnStatusNote');
 
 const scoreValue = document.getElementById('scoreValue');
 const scoreLabel = document.getElementById('scoreLabel');
@@ -24,9 +26,33 @@ const explanationText = document.getElementById('explanationText');
 const loadingOverlay = document.getElementById('loadingOverlay');
 
 let selectedPath = null;
+let currentHistory = [];
 
 function basename(filePath) {
   return String(filePath || '').split(/[\\/]/).pop() || 'Unknown';
+}
+
+function formatTime(timestamp) {
+  if (!timestamp) return 'Unknown time';
+
+  try {
+    return new Date(timestamp).toLocaleString();
+  } catch (_error) {
+    return String(timestamp);
+  }
+}
+
+function renderCnnStatus(status) {
+  if (!cnnStatusNote) return;
+
+  if (status?.available) {
+    cnnStatusNote.classList.add('hidden');
+    return;
+  }
+
+  cnnStatusNote.classList.remove('hidden');
+  cnnStatusNote.textContent =
+    `CNN is optional and currently unavailable. Minnalize will continue with PE-only analysis until ${status?.modelName || 'the CNN model'} weights are added at ${status?.expectedWeights || 'the expected model path'}.`;
 }
 
 function fileUrl(filePath) {
@@ -113,6 +139,14 @@ function renderResult(result, source = 'Manual analysis') {
       `${source}: ${scoreTone(scoreInfo.score ?? 0)} from CNN-primary fusion ` +
       `(${cnnWeight}% CNN, ${peWeight}% PE). ` +
       `CNN visual score: ${cnnInfo.visual_score ?? 0}/100, top confidence: ${top1}%.`;
+  } else if (cnnInfo.available && scoreInfo.blend_mode === 'cnn_supporting') {
+    const cnnWeight = Math.round((scoreInfo.cnn_weight ?? 0.35) * 100);
+    const peWeight = Math.round((scoreInfo.pe_weight ?? 0.65) * 100);
+
+    scoreSummary.textContent =
+      `${source}: ${scoreTone(scoreInfo.score ?? 0)} based mainly on PE structure ` +
+      `with a supporting visual-anomaly signal from the fallback CNN ` +
+      `(${cnnWeight}% CNN, ${peWeight}% PE).`;
   } else if (scoreInfo.cnn_used) {
     scoreSummary.textContent =
       `${source}: ${scoreTone(scoreInfo.score ?? 0)} based on PE rules (${scoreInfo.rule_score ?? 0}/100) ` +
@@ -154,6 +188,52 @@ function renderResult(result, source = 'Manual analysis') {
     resultImage.src = '';
     imagePlaceholder.style.display = 'block';
   }
+}
+
+function renderHistory(historyItems = []) {
+  currentHistory = Array.isArray(historyItems) ? historyItems : [];
+  historyList.innerHTML = '';
+
+  if (!currentHistory.length) {
+    const empty = document.createElement('p');
+    empty.className = 'history-empty';
+    empty.textContent = 'No scans yet.';
+    historyList.appendChild(empty);
+    return;
+  }
+
+  currentHistory.forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'history-item';
+
+    const score = item.result?.score_info?.score;
+    const label = item.result?.score_info?.label || (item.status === 'error' ? 'Failed' : 'Scanned');
+
+    button.innerHTML = `
+      <div class="history-title-row">
+        <strong>${item.fileName || basename(item.filePath)}</strong>
+        <span class="history-status history-status-${item.status}">${label}</span>
+      </div>
+      <div class="history-meta">${item.source === 'automatic' ? 'Downloads auto-scan' : 'Manual scan'} • ${formatTime(item.timestamp)}</div>
+      <div class="history-path">${item.filePath || ''}</div>
+      <div class="history-summary">${item.status === 'success' ? `Score: ${score ?? '--'}/100` : item.error || 'Analysis failed'}</div>
+    `;
+
+    button.addEventListener('click', () => {
+      updateSelectedFile(item.filePath, item.source === 'automatic' ? 'Auto-scan history' : 'Manual history');
+
+      if (item.status === 'success' && item.result) {
+        renderResult(item.result, item.source === 'automatic' ? 'Automatic Downloads scan history' : 'Manual scan history');
+        statusPill.textContent = 'History loaded';
+      } else {
+        explanationText.textContent = `Previous scan failed:\n${item.error || 'Unknown error'}`;
+        statusPill.textContent = 'History error';
+      }
+    });
+
+    historyList.appendChild(button);
+  });
 }
 
 chooseBtn.addEventListener('click', async () => {
@@ -217,13 +297,23 @@ window.desktopAPI.onAutoScanError?.(({ filePath, error }) => {
   statusPill.textContent = 'Auto-scan error';
 });
 
+window.desktopAPI.onHistoryUpdated?.((history) => {
+  renderHistory(history);
+});
+
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    const cnnStatus = await window.desktopAPI.getCnnStatus?.();
+    renderCnnStatus(cnnStatus);
+
     const downloadsPath = await window.desktopAPI.getDownloadsPath?.();
     if (downloadsPath) {
       downloadsInfo.textContent = `Watching: ${downloadsPath}`;
       downloadsInfo.title = downloadsPath;
     }
+
+    const history = await window.desktopAPI.getHistory?.();
+    renderHistory(history);
 
     const lastResult = await window.desktopAPI.getLastAutoScanResult?.();
     if (lastResult?.filePath && lastResult?.result) {

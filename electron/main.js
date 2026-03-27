@@ -16,8 +16,11 @@ const { spawn } = require('node:child_process');
 const chokidar = require('chokidar');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const RENDERER_DIR = path.join(PROJECT_ROOT, 'renderer');
+const RENDERER_DIR = path.join(__dirname, 'renderer');
 const APP_DIR = path.join(PROJECT_ROOT, 'app');
+const CNN_WEIGHTS_PATH = path.join(APP_DIR, 'models', 'ResNet-custom.pth');
+const VENV_PYTHON_PATH = path.join(PROJECT_ROOT, '.venv', 'Scripts', 'python.exe');
+const VENV_SITE_PACKAGES = path.join(PROJECT_ROOT, '.venv', 'Lib', 'site-packages');
 const WATCHED_EXTENSIONS = new Set(['.exe', '.dll']);
 
 let mainWindow = null;
@@ -27,9 +30,64 @@ let isQuitting = false;
 
 let lastAutoScanSuccess = null;
 let lastAutoScanError = null;
+let hasShownBackgroundHint = false;
 
 const activeScans = new Set();
 const scannedFingerprints = new Map();
+const scanHistory = [];
+const MAX_HISTORY_ITEMS = 100;
+
+function getHistoryFilePath() {
+  return path.join(app.getPath('userData'), 'scan-history.json');
+}
+
+async function loadScanHistory() {
+  try {
+    const raw = await fsp.readFile(getHistoryFilePath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      scanHistory.splice(0, scanHistory.length, ...parsed);
+    }
+  } catch (error) {
+    if (error && error.code !== 'ENOENT') {
+      console.error('Could not load scan history:', error);
+    }
+  }
+}
+
+async function persistScanHistory() {
+  try {
+    await fsp.mkdir(app.getPath('userData'), { recursive: true });
+    await fsp.writeFile(getHistoryFilePath(), JSON.stringify(scanHistory, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Could not persist scan history:', error);
+  }
+}
+
+function sanitizeHistoryResult(result) {
+  if (!result) return null;
+
+  return {
+    file_name: result.file_name,
+    timestamp: result.timestamp,
+    explanation: result.explanation,
+    image_info: result.image_info,
+    pe_info: result.pe_info,
+    cnn_info: result.cnn_info,
+    score_info: result.score_info
+  };
+}
+
+function recordHistory(entry) {
+  scanHistory.unshift(entry);
+
+  if (scanHistory.length > MAX_HISTORY_ITEMS) {
+    scanHistory.length = MAX_HISTORY_ITEMS;
+  }
+
+  void persistScanHistory();
+  sendToRenderer('history:updated', scanHistory);
+}
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -64,10 +122,16 @@ function createWindow() {
     mainWindow.focus();
   });
 
+  // Hide to background instead of closing - app continues monitoring
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
+
+      if (!hasShownBackgroundHint) {
+        hasShownBackgroundHint = true;
+        showBackgroundNotification();
+      }
     }
   });
 }
@@ -108,16 +172,26 @@ function maybeCreateTray() {
   ];
 
   const iconPath = trayCandidates.find((candidate) => fs.existsSync(candidate));
-  if (!iconPath) return;
+  let trayIcon = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
 
-  const trayIcon = nativeImage.createFromPath(iconPath);
+  if (trayIcon.isEmpty()) {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+        <rect width="64" height="64" rx="16" fill="#10213a"/>
+        <path d="M32 10L48 18V30C48 41 41 50 32 54C23 50 16 41 16 30V18L32 10Z" fill="#6ea8fe"/>
+        <path d="M32 18L42 23V30C42 38 37 44 32 47C27 44 22 38 22 30V23L32 18Z" fill="#08101c"/>
+      </svg>
+    `.trim();
+    trayIcon = nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+  }
+
   if (trayIcon.isEmpty()) return;
 
   tray = new Tray(trayIcon);
-  tray.setToolTip('ExeVision');
+  tray.setToolTip('Minnalize');
 
   const menu = Menu.buildFromTemplate([
-    { label: 'Open ExeVision', click: showMainWindow },
+    { label: 'Open Minnalize', click: showMainWindow },
     { type: 'separator' },
     {
       label: 'Quit',
@@ -143,6 +217,18 @@ function maybeCreateTray() {
   });
 }
 
+function showBackgroundNotification() {
+  if (!Notification.isSupported()) return;
+
+  const notification = new Notification({
+    title: 'Minnalize is still running',
+    body: 'The window was hidden. Downloads monitoring continues in the background.'
+  });
+
+  notification.on('click', showMainWindow);
+  notification.show();
+}
+
 function getPythonLaunchConfig() {
   const bridgeScript = path.join(APP_DIR, 'electron_bridge.py');
 
@@ -153,6 +239,15 @@ function getPythonLaunchConfig() {
   if (process.env.PYTHON_PATH) {
     return {
       command: process.env.PYTHON_PATH,
+      args: [bridgeScript]
+    };
+  }
+
+  // Prefer the project virtualenv so the Python bridge uses the same
+  // interpreter that already has torch/torchvision installed.
+  if (fs.existsSync(VENV_PYTHON_PATH)) {
+    return {
+      command: VENV_PYTHON_PATH,
       args: [bridgeScript]
     };
   }
@@ -260,7 +355,7 @@ function showSuccessNotification(filePath, result) {
 
   const payload = { filePath, result };
   const notification = new Notification({
-    title: 'ExeVision auto-scan complete',
+    title: 'Minnalize auto-scan complete',
     body: `${path.basename(filePath)} → ${result.score_info?.label || 'Done'} (${result.score_info?.score ?? '--'}/100)`
   });
 
@@ -277,7 +372,7 @@ function showErrorNotification(filePath, errorMessage) {
 
   const payload = { filePath, error: errorMessage };
   const notification = new Notification({
-    title: 'ExeVision auto-scan failed',
+    title: 'Minnalize auto-scan failed',
     body: `${path.basename(filePath)} → ${errorMessage}`
   });
 
@@ -306,6 +401,15 @@ async function autoAnalyzeFile(filePath) {
 
     lastAutoScanSuccess = { filePath, result };
     lastAutoScanError = null;
+    recordHistory({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      filePath,
+      fileName: path.basename(filePath),
+      timestamp: new Date().toISOString(),
+      source: 'automatic',
+      status: 'success',
+      result: sanitizeHistoryResult(result)
+    });
 
     sendToRenderer('autoscan:complete', lastAutoScanSuccess);
     showSuccessNotification(filePath, result);
@@ -314,6 +418,15 @@ async function autoAnalyzeFile(filePath) {
 
     lastAutoScanError = { filePath, error: message };
     lastAutoScanSuccess = null;
+    recordHistory({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      filePath,
+      fileName: path.basename(filePath),
+      timestamp: new Date().toISOString(),
+      source: 'automatic',
+      status: 'error',
+      error: message
+    });
 
     sendToRenderer('autoscan:error', lastAutoScanError);
     showErrorNotification(filePath, message);
@@ -370,14 +483,57 @@ ipcMain.handle('analysis:run', async (_event, filePath) => {
     throw new Error('No file selected.');
   }
 
-  return await runAnalysis(filePath);
+  try {
+    const result = await runAnalysis(filePath);
+
+    recordHistory({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      filePath,
+      fileName: path.basename(filePath),
+      timestamp: new Date().toISOString(),
+      source: 'manual',
+      status: 'success',
+      result: sanitizeHistoryResult(result)
+    });
+
+    return result;
+  } catch (error) {
+    const message = String(error.message || error);
+
+    recordHistory({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      filePath,
+      fileName: path.basename(filePath),
+      timestamp: new Date().toISOString(),
+      source: 'manual',
+      status: 'error',
+      error: message
+    });
+
+    throw error;
+  }
 });
 
 ipcMain.handle('autoscan:getLastResult', async () => lastAutoScanSuccess);
 ipcMain.handle('autoscan:getLastError', async () => lastAutoScanError);
 ipcMain.handle('system:getDownloadsPath', async () => app.getPath('downloads'));
+ipcMain.handle('system:getCnnStatus', async () => {
+  const hasCustomWeights = fs.existsSync(CNN_WEIGHTS_PATH);
+  const hasTorchFallback =
+    fs.existsSync(path.join(VENV_SITE_PACKAGES, 'torch')) &&
+    fs.existsSync(path.join(VENV_SITE_PACKAGES, 'torchvision'));
 
-app.whenReady().then(() => {
+  return {
+    available: hasCustomWeights || hasTorchFallback,
+    mode: hasCustomWeights ? 'custom' : hasTorchFallback ? 'fallback' : 'unavailable',
+    expectedWeights: CNN_WEIGHTS_PATH,
+    modelName: hasCustomWeights ? 'ResNet-custom' : 'resnet18'
+  };
+});
+ipcMain.handle('history:getAll', async () => scanHistory);
+
+app.whenReady().then(async () => {
+  await loadScanHistory();
   createWindow();
   maybeCreateTray();
   startDownloadsWatcher();

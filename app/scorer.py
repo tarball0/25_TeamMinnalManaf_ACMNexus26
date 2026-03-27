@@ -78,34 +78,50 @@ def compute_suspicion_score(pe_info: dict, cnn_info: dict | None = None) -> dict
 
     cnn_weight = 0.75
     pe_weight = 0.25
+    blend_mode = "pe_only"
 
     if cnn_available:
+        if cnn_info and not cnn_info.get("malware_specific", False):
+            cnn_weight = 0.35
+            pe_weight = 0.65
+            blend_mode = "cnn_supporting"
+        else:
+            blend_mode = "cnn_primary"
+
         top1_conf = float(cnn_info.get("top1_confidence", 0.0))
         top_margin = float(cnn_info.get("top_margin", 0.0))
 
         final_score = _clamp((cnn_weight * cnn_visual_score) + (pe_weight * rule_score))
 
-        if cnn_visual_score >= 85 and top1_conf >= 0.85:
-            final_score = max(final_score, 82)
-            reasons.insert(
-                0,
-                f"Public pretrained malware-image CNN found a strong visual malware-family match ({top1_conf:.1%} confidence).",
-            )
-        elif cnn_visual_score >= 70 and top1_conf >= 0.70:
-            reasons.insert(
-                0,
-                f"CNN found a clear malware-image pattern ({top1_conf:.1%} confidence).",
-            )
-        elif cnn_visual_score >= 55:
-            reasons.insert(
-                0,
-                f"CNN found a moderate malware-image pattern ({top1_conf:.1%} confidence).",
-            )
+        if cnn_info.get("malware_specific", False):
+            if cnn_visual_score >= 85 and top1_conf >= 0.85:
+                final_score = max(final_score, 82)
+                reasons.insert(
+                    0,
+                    f"Public pretrained malware-image CNN found a strong visual malware-family match ({top1_conf:.1%} confidence).",
+                )
+            elif cnn_visual_score >= 70 and top1_conf >= 0.70:
+                reasons.insert(
+                    0,
+                    f"CNN found a clear malware-image pattern ({top1_conf:.1%} confidence).",
+                )
+            elif cnn_visual_score >= 55:
+                reasons.insert(
+                    0,
+                    f"CNN found a moderate malware-image pattern ({top1_conf:.1%} confidence).",
+                )
+            else:
+                reasons.insert(
+                    0,
+                    f"CNN signal was weak ({top1_conf:.1%} confidence), so the final score stayed lower.",
+                )
         else:
-            reasons.insert(
-                0,
-                f"CNN signal was weak ({top1_conf:.1%} confidence), so the final score stayed lower.",
-            )
+            if cnn_visual_score >= 80:
+                reasons.insert(0, "Pretrained ResNet18 visual encoder found a strong byte-image anomaly.")
+            elif cnn_visual_score >= 60:
+                reasons.insert(0, "Pretrained ResNet18 visual encoder found a moderate byte-image anomaly.")
+            else:
+                reasons.insert(0, "Pretrained ResNet18 visual encoder found only a weak byte-image anomaly.")
 
         if top_margin >= 0.35:
             reasons.append("CNN top-class margin was strong, so the visual match was relatively decisive.")
@@ -120,7 +136,10 @@ def compute_suspicion_score(pe_info: dict, cnn_info: dict | None = None) -> dict
         final_score = rule_score
         cnn_bonus = 0
         if cnn_info and cnn_info.get("status"):
-            reasons.insert(0, f"CNN could not be used: {cnn_info['status']}.")
+            if cnn_info["status"] == "cnn_unavailable":
+                reasons.insert(0, "CNN model is not installed, so this result uses PE-only analysis.")
+            else:
+                reasons.insert(0, f"CNN could not be used: {cnn_info['status']}.")
 
     final_score = _clamp(final_score)
 
@@ -134,5 +153,5 @@ def compute_suspicion_score(pe_info: dict, cnn_info: dict | None = None) -> dict
         "cnn_bonus": cnn_bonus,
         "cnn_weight": cnn_weight if cnn_available else 0.0,
         "pe_weight": pe_weight if cnn_available else 1.0,
-        "blend_mode": "cnn_primary" if cnn_available else "pe_only",
+        "blend_mode": blend_mode,
     }

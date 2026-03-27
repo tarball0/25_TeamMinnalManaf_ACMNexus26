@@ -8,9 +8,9 @@ from PIL import Image
 
 from app.main import analyze_file
 
-st.set_page_config(page_title="Executable Grayscale Analyzer", layout="wide")
+st.set_page_config(page_title="Minnalize", layout="wide")
 
-st.title("Executable Grayscale Analyzer")
+st.title("Minnalize")
 st.write(
     "Upload an executable file to generate a grayscale byte image, "
     "extract PE features, and compute a simple suspiciousness score."
