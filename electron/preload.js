@@ -14,5 +14,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
     const handler = (_event, payload) => callback(payload);
     ipcRenderer.on('autoscan:error', handler);
     return () => ipcRenderer.removeListener('autoscan:error', handler);
-  }
+  },
+
+  getLastAutoScanResult: () => ipcRenderer.invoke('autoscan:getLastResult'),
+  getLastAutoScanError: () => ipcRenderer.invoke('autoscan:getLastError')
 });
