@@ -28,3 +28,16 @@
 
 ### Issues Faced
 - Initial remote image download attempt failed, resolved by using provided local files
+
+## 09:08
+
+### Features Added
+- Prepared a detailed technical walkthrough of the Minnalize codebase for judge-facing explanation
+- Validated end-to-end analyzer behavior on bundled benign, malware, and non-PE sample files for demo readiness
+- Compiled additional theory-focused judge questions and answer points around PE analysis, signatures, entropy, and grayscale byte-image ML
+
+### Files Modified
+- CHANGELOG.md
+
+### Issues Faced
+- Repo-wide file listing hit an access error on the `progress/` folder, so codebase analysis was completed by reading the source tree directly
