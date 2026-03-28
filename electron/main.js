@@ -18,7 +18,7 @@ const chokidar = require('chokidar');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const RENDERER_DIR = path.join(__dirname, 'renderer');
 const APP_DIR = path.join(PROJECT_ROOT, 'app');
-const CNN_WEIGHTS_PATH = path.join(APP_DIR, 'models', 'ResNet-custom.pth');
+const CNN_WEIGHTS_PATH = path.join(APP_DIR, 'models', 'binary_malware_scanner.pth');
 const VENV_PYTHON_PATH = path.join(PROJECT_ROOT, '.venv', 'Scripts', 'python.exe');
 const VENV_SITE_PACKAGES = path.join(PROJECT_ROOT, '.venv', 'Lib', 'site-packages');
 const WATCHED_EXTENSIONS = new Set(['.exe', '.dll']);
@@ -527,7 +527,7 @@ ipcMain.handle('system:getCnnStatus', async () => {
     available: hasCustomWeights || hasTorchFallback,
     mode: hasCustomWeights ? 'custom' : hasTorchFallback ? 'fallback' : 'unavailable',
     expectedWeights: CNN_WEIGHTS_PATH,
-    modelName: hasCustomWeights ? 'ResNet-custom' : 'resnet18'
+    modelName: hasCustomWeights ? 'efficientnet-b0' : 'resnet18'
   };
 });
 ipcMain.handle('history:getAll', async () => scanHistory);

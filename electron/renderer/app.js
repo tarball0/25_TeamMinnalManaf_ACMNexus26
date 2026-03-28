@@ -9,6 +9,7 @@ const cnnStatusNote = document.getElementById('cnnStatusNote');
 
 const scoreValue = document.getElementById('scoreValue');
 const scoreLabel = document.getElementById('scoreLabel');
+const scoreRing = document.getElementById('scoreRing');
 const meterBar = document.getElementById('meterBar');
 const scoreSummary = document.getElementById('scoreSummary');
 
@@ -19,6 +20,9 @@ const isPe = document.getElementById('isPe');
 const numSections = document.getElementById('numSections');
 const avgEntropy = document.getElementById('avgEntropy');
 const importsCount = document.getElementById('importsCount');
+const signatureStatus = document.getElementById('signatureStatus');
+const trustedPublisher = document.getElementById('trustedPublisher');
+const signatureSubject = document.getElementById('signatureSubject');
 
 const sectionNames = document.getElementById('sectionNames');
 const reasonList = document.getElementById('reasonList');
@@ -75,6 +79,7 @@ function setLoading(isLoading) {
 function resetResults() {
   scoreValue.textContent = '--';
   scoreLabel.textContent = 'Waiting';
+  scoreRing?.style.setProperty('--score-angle', '0deg');
   meterBar.style.width = '0%';
   scoreSummary.textContent = 'Select a file and run analysis to see the score.';
 
@@ -86,6 +91,9 @@ function resetResults() {
   numSections.textContent = '--';
   avgEntropy.textContent = '--';
   importsCount.textContent = '--';
+  signatureStatus.textContent = '--';
+  trustedPublisher.textContent = '--';
+  signatureSubject.textContent = 'No signature details yet';
 
   sectionNames.innerHTML = '';
   reasonList.innerHTML = '';
@@ -125,32 +133,36 @@ function renderResult(result, source = 'Manual analysis') {
   const scoreInfo = result.score_info || {};
   const imageInfo = result.image_info || {};
   const cnnInfo = result.cnn_info || {};
+  const signatureInfo = result.signature_info || {};
+  const score = Number(scoreInfo.score ?? 0);
+  const clampedScore = Math.max(0, Math.min(100, score));
+  const scoreAngle = `${(clampedScore / 100) * 360}deg`;
 
   scoreValue.textContent = String(scoreInfo.score ?? '--');
   scoreLabel.textContent = scoreInfo.label || 'Waiting';
-  meterBar.style.width = `${scoreInfo.score ?? 0}%`;
+  scoreRing?.style.setProperty('--score-angle', scoreAngle);
+  meterBar.style.width = `${clampedScore}%`;
 
-  if (cnnInfo.available && scoreInfo.blend_mode === 'cnn_primary') {
-    const cnnWeight = Math.round((scoreInfo.cnn_weight ?? 0.75) * 100);
-    const peWeight = Math.round((scoreInfo.pe_weight ?? 0.25) * 100);
+  if (cnnInfo.available && scoreInfo.blend_mode === 'unsigned_cnn_pe_70_30') {
+    const cnnWeight = Math.round((scoreInfo.cnn_weight ?? 0.7) * 100);
+    const peWeight = Math.round((scoreInfo.pe_weight ?? 0.3) * 100);
     const top1 = Math.round((cnnInfo.top1_confidence ?? 0) * 100);
 
     scoreSummary.textContent =
-      `${source}: ${scoreTone(scoreInfo.score ?? 0)} from CNN-primary fusion ` +
+      `${source}: ${scoreTone(scoreInfo.score ?? 0)} from unsigned-file CNN/PE fusion ` +
       `(${cnnWeight}% CNN, ${peWeight}% PE). ` +
       `CNN visual score: ${cnnInfo.visual_score ?? 0}/100, top confidence: ${top1}%.`;
-  } else if (cnnInfo.available && scoreInfo.blend_mode === 'cnn_supporting') {
-    const cnnWeight = Math.round((scoreInfo.cnn_weight ?? 0.35) * 100);
-    const peWeight = Math.round((scoreInfo.pe_weight ?? 0.65) * 100);
-
+  } else if (scoreInfo.blend_mode === 'signed_pe_only') {
     scoreSummary.textContent =
-      `${source}: ${scoreTone(scoreInfo.score ?? 0)} based mainly on PE structure ` +
-      `with a supporting visual-anomaly signal from the fallback CNN ` +
-      `(${cnnWeight}% CNN, ${peWeight}% PE).`;
+      `${source}: ${scoreTone(scoreInfo.score ?? 0)} based on PE headers and signature status. ` +
+      `CNN evidence is ignored because the file is signed.`;
   } else if (scoreInfo.cnn_used) {
     scoreSummary.textContent =
-      `${source}: ${scoreTone(scoreInfo.score ?? 0)} based on PE rules (${scoreInfo.rule_score ?? 0}/100) ` +
-      `with a limited CNN support bonus (+${scoreInfo.cnn_bonus ?? 0}).`;
+      `${source}: ${scoreTone(scoreInfo.score ?? 0)} using CNN and PE header scoring.`;
+  } else if (cnnInfo.status === 'cnn_skipped') {
+    scoreSummary.textContent =
+      `${source}: ${scoreTone(scoreInfo.score ?? 0)} based on PE headers and signature status. ` +
+      `CNN was skipped because ${cnnInfo.reason || 'the file is signed'}.`;
   } else {
     scoreSummary.textContent =
       `${source}: ${scoreTone(scoreInfo.score ?? 0)} based mainly on PE structure because the CNN was unavailable.`;
@@ -160,6 +172,9 @@ function renderResult(result, source = 'Manual analysis') {
   numSections.textContent = String(peInfo.num_sections ?? 0);
   avgEntropy.textContent = String(peInfo.avg_section_entropy ?? 0);
   importsCount.textContent = String(peInfo.imports_count ?? 0);
+  signatureStatus.textContent = signatureInfo.status || 'Unavailable';
+  trustedPublisher.textContent = signatureInfo.trusted_publisher ? 'Yes' : 'No';
+  signatureSubject.textContent = signatureInfo.subject || signatureInfo.status_message || 'No signature details available';
 
   sectionNames.innerHTML = '';
   if (Array.isArray(peInfo.section_names) && peInfo.section_names.length) {

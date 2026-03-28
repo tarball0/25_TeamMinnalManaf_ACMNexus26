@@ -295,13 +295,21 @@ body {
 }
 
 .score-ring {
+  --score-angle: 0deg;
   width: 180px;
   height: 180px;
   border-radius: 50%;
   padding: 12px;
-  background: conic-gradient(var(--primary) 0deg, var(--accent) 140deg, rgba(255,255,255,0.08) 140deg);
+  background: conic-gradient(
+    from -90deg,
+    var(--primary) 0deg,
+    var(--accent) var(--score-angle),
+    rgba(255,255,255,0.08) var(--score-angle),
+    rgba(255,255,255,0.08) 360deg
+  );
   display: grid;
   place-items: center;
+  transition: background 0.25s ease;
 }
 
 .score-ring-inner {
@@ -496,6 +504,13 @@ body {
 
 .detail-block h4 {
   margin: 0 0 10px;
+}
+
+.signature-text {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  word-break: break-word;
 }
 
 .tag-wrap {
