@@ -1,6 +1,6 @@
 # Minnalize
 
-Minnalize is a malware triage tool developed for the ACM MITS Hackathon that prioritizes **computer vision** for binary classification. By converting executable binaries into grayscale images, it identifies malicious structural patterns using a fine-tuned **Convolutional Neural Network (CNN)**. This visual approach is augmented by traditional static PE header analysis and Authenticode signature verification.
+Minnalize is a malware triage tool that prioritizes **computer vision** for binary classification. By converting executable binaries into grayscale images, it identifies malicious structural patterns using a fine-tuned **Convolutional Neural Network (CNN)**. This visual approach is augmented by traditional static PE header analysis and Authenticode signature verification.
 
 The project treats binaries as spatial data, preserving byte-sequence correlations to make malicious fingerprints visible to deep learning models that traditional static analysis might miss.
 
@@ -67,5 +67,3 @@ The project treats binaries as spatial data, preserving byte-sequence correlatio
 *   **OS:** Windows (Required for full PowerShell signature verification).
 *   **Python:** 3.8+ with `torch`, `torchvision`, `pefile`, and `numpy`.
 *   **Node.js:** For the Electron frontend.
-
-Developed for the ACM MITS Hackathon.
